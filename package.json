@@ -1,0 +1,22 @@
+{
+  "name": "garatech",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plateforme intégrée de gestion de garage, stocks, dépannage & suivi client",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "start": "pnpm --filter web start",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:studio": "pnpm --filter web prisma studio",
+    "db:migrate": "pnpm --filter web prisma migrate dev"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

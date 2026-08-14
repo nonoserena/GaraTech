@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Env files (ne jamais committer les vraies valeurs)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Supabase local
+.supabase/
+supabase/.temp/
+
+# Docker volumes
+docker/volumes/db/data/
+docker/volumes/storage/
+
+# Prisma
+apps/web/prisma/migrations/dev.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Testing
+coverage/

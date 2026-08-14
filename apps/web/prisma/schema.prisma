@@ -1,0 +1,72 @@
+// ═══════════════════════════════════════════════════════════
+// GaraTech — Schéma Prisma initial
+// Squelette basé sur le CDCF et les workflows métier validés.
+// À affiner lors de la session de modélisation dédiée.
+// ═══════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  RECEPTIONNISTE
+  MECANICIEN
+  DEPANNEUR
+  CLIENT
+}
+
+enum RepairOrderStatus {
+  RECEPTION
+  DIAGNOSTIC
+  DEVIS_EN_ATTENTE
+  DEVIS_REFUSE
+  EN_REPARATION
+  EN_PAUSE_AVENANT
+  CONTROLE_QUALITE
+  PRET
+  FACTURE
+  SORTI
+}
+
+// Placeholder — sera détaillé lors de la session de modélisation
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      UserRole
+  createdAt DateTime @default(now())
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  nom       String
+  telephone String
+  email     String?
+  vehicles  Vehicle[]
+  createdAt DateTime @default(now())
+}
+
+model Vehicle {
+  id             String        @id @default(uuid())
+  client         Client        @relation(fields: [clientId], references: [id])
+  clientId       String
+  marque         String
+  modele         String
+  immatriculation String       @unique
+  vin            String?
+  kilometrage    Int?
+  repairOrders   RepairOrder[]
+}
+
+model RepairOrder {
+  id        String            @id @default(uuid())
+  vehicle   Vehicle           @relation(fields: [vehicleId], references: [id])
+  vehicleId String
+  status    RepairOrderStatus @default(RECEPTION)
+  createdAt DateTime          @default(now())
+}

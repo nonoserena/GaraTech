@@ -1,0 +1,165 @@
+
+name: garatech
+
+services:
+  # ──────────────────────────────────────────────
+  # Base de données PostgreSQL
+  # ──────────────────────────────────────────────
+  db:
+    image: supabase/postgres:15.1.1.78
+    container_name: garatech-db
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      - ./docker/volumes/db/data:/var/lib/postgresql/data
+      - ./docker/volumes/db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────────
+  # Auth (GoTrue) - gestion des rôles Admin, Réceptionniste,
+  # Mécanicien, Dépanneur, Client
+  # ──────────────────────────────────────────────
+  auth:
+    image: supabase/gotrue:v2.151.0
+    container_name: garatech-auth
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+
+  # ──────────────────────────────────────────────
+  # REST API (PostgREST) - expose la base via API auto-générée
+  # ──────────────────────────────────────────────
+  rest:
+    image: postgrest/postgrest:v12.0.2
+    container_name: garatech-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  # ──────────────────────────────────────────────
+  # Realtime - Websockets pour la géolocalisation live
+  # des dépanneuses (Module 4)
+  # ──────────────────────────────────────────────
+  realtime:
+    image: supabase/realtime:v2.28.32
+    container_name: garatech-realtime
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+
+  # ──────────────────────────────────────────────
+  # Postgres-Meta - nécessaire pour que Studio explore le schéma
+  # ──────────────────────────────────────────────
+  meta:
+    image: supabase/postgres-meta:v0.75.0
+    container_name: garatech-meta
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  # ──────────────────────────────────────────────
+  # Studio - interface d'administration visuelle de la base
+  # ──────────────────────────────────────────────
+  studio:
+    image: supabase/studio:20240422-5cf8f30
+    container_name: garatech-studio
+    restart: unless-stopped
+    depends_on:
+      - meta
+      - rest
+    ports:
+      - "${STUDIO_PORT:-54323}:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: GaraTech
+      DEFAULT_PROJECT_NAME: GaraTech Local
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${SITE_URL:-http://localhost:3000}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+
+  # ──────────────────────────────────────────────
+  # Kong - API Gateway unifiant auth/rest/realtime sur un seul port
+  # ──────────────────────────────────────────────
+  kong:
+    image: kong:2.8.1
+    container_name: garatech-kong
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - rest
+      - realtime
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    volumes:
+      - ./docker/volumes/api/kong.yml:/var/lib/kong/kong.yml:ro
+
+volumes:
+  db-data:
