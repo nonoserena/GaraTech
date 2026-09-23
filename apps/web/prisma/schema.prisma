@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// GaraTech — Schéma Prisma initial
-// Squelette basé sur le CDCF et les workflows métier validés.
-// À affiner lors de la session de modélisation dédiée.
-// ═══════════════════════════════════════════════════════════
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,6 +15,11 @@ enum UserRole {
   CLIENT
 }
 
+enum ClientType {
+  PARTICULIER
+  FLOTTE
+}
+
 enum RepairOrderStatus {
   RECEPTION
   DIAGNOSTIC
@@ -32,41 +31,213 @@ enum RepairOrderStatus {
   PRET
   FACTURE
   SORTI
+  CLOTURE_SANS_REPARATION
 }
 
-// Placeholder — sera détaillé lors de la session de modélisation
+enum QuoteType {
+  INITIAL
+  AVENANT
+}
+
+enum QuoteStatus {
+  EN_ATTENTE
+  VALIDE
+  REFUSE
+}
+
+enum StockMovementType {
+  APPROVISIONNEMENT
+  SORTIE
+  AJUSTEMENT
+}
+
+enum PaymentStatus {
+  PAYE
+  ACOMPTE
+  EN_ATTENTE
+}
+
+enum MissionStatus {
+  EN_ATTENTE
+  AFFECTEE
+  EN_COURS
+  TERMINEE
+  ANNULEE
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String          @id @default(uuid())
+  email     String          @unique
   role      UserRole
-  createdAt DateTime @default(now())
+  client    Client?
+  missions  TowingMission[] @relation("DepanneurMissions")
+  createdAt DateTime        @default(now())
 }
 
 model Client {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
+  user      User?           @relation(fields: [userId], references: [id])
+  userId    String?         @unique
   nom       String
   telephone String
   email     String?
+  type      ClientType      @default(PARTICULIER)
   vehicles  Vehicle[]
-  createdAt DateTime @default(now())
+  missions  TowingMission[]
+  createdAt DateTime        @default(now())
 }
 
 model Vehicle {
-  id             String        @id @default(uuid())
-  client         Client        @relation(fields: [clientId], references: [id])
-  clientId       String
-  marque         String
-  modele         String
-  immatriculation String       @unique
-  vin            String?
-  kilometrage    Int?
-  repairOrders   RepairOrder[]
+  id              String        @id @default(uuid())
+  client          Client        @relation(fields: [clientId], references: [id])
+  clientId        String
+  marque          String
+  modele          String
+  immatriculation String        @unique
+  vin             String?
+  kilometrage     Int?
+  repairOrders    RepairOrder[]
+  createdAt       DateTime      @default(now())
 }
 
 model RepairOrder {
-  id        String            @id @default(uuid())
-  vehicle   Vehicle           @relation(fields: [vehicleId], references: [id])
-  vehicleId String
-  status    RepairOrderStatus @default(RECEPTION)
-  createdAt DateTime          @default(now())
+  id                String            @id @default(uuid())
+  vehicle           Vehicle           @relation(fields: [vehicleId], references: [id])
+  vehicleId         String
+  status            RepairOrderStatus @default(RECEPTION)
+  kilometrageEntree Int?
+  quotes            Quote[]
+  invoice           Invoice?
+  parts             RepairOrderPart[]
+  stockMovements    StockMovement[]
+  trackingLink      TrackingLink?
+  createdAt         DateTime          @default(now())
+  closedAt          DateTime?
+}
+
+model Quote {
+  id            String      @id @default(uuid())
+  repairOrder   RepairOrder @relation(fields: [repairOrderId], references: [id])
+  repairOrderId String
+  type          QuoteType   @default(INITIAL)
+  status        QuoteStatus @default(EN_ATTENTE)
+  montantTotal  Decimal     @db.Decimal(10, 2)
+  lines         QuoteLine[]
+  createdAt     DateTime    @default(now())
+  validatedAt   DateTime?
+}
+
+model QuoteLine {
+  id           String  @id @default(uuid())
+  quote        Quote   @relation(fields: [quoteId], references: [id])
+  quoteId      String
+  part         Part?   @relation(fields: [partId], references: [id])
+  partId       String?
+  description  String
+  quantite     Int
+  prixUnitaire Decimal @db.Decimal(10, 2)
+}
+
+model Supplier {
+  id        String         @id @default(uuid())
+  nom       String
+  telephone String?
+  parts     PartSupplier[]
+}
+
+model PartSupplier {
+  id         String   @id @default(uuid())
+  part       Part     @relation(fields: [partId], references: [id])
+  partId     String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId String
+  prixAchat  Decimal  @db.Decimal(10, 2)
+  isDefault  Boolean  @default(false)
+
+  @@unique([partId, supplierId])
+}
+
+model Part {
+  id               String            @id @default(uuid())
+  reference        String            @unique
+  designation      String
+  marque           String?
+  prixVente        Decimal           @db.Decimal(10, 2)
+  quantiteStock    Int               @default(0)
+  seuilAlerte      Int               @default(5)
+  suppliers        PartSupplier[]
+  quoteLines       QuoteLine[]
+  movements        StockMovement[]
+  repairOrderParts RepairOrderPart[]
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  part          Part              @relation(fields: [partId], references: [id])
+  partId        String
+  type          StockMovementType
+  quantite      Int
+  repairOrder   RepairOrder?      @relation(fields: [repairOrderId], references: [id])
+  repairOrderId String?
+  createdAt     DateTime          @default(now())
+}
+
+model RepairOrderPart {
+  id            String      @id @default(uuid())
+  repairOrder   RepairOrder @relation(fields: [repairOrderId], references: [id])
+  repairOrderId String
+  part          Part        @relation(fields: [partId], references: [id])
+  partId        String
+  quantite      Int
+  prixUnitaire  Decimal     @db.Decimal(10, 2)
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  repairOrder    RepairOrder   @relation(fields: [repairOrderId], references: [id])
+  repairOrderId  String        @unique
+  numero         String        @unique
+  montantTotal   Decimal       @db.Decimal(10, 2)
+  statutPaiement PaymentStatus @default(EN_ATTENTE)
+  createdAt      DateTime      @default(now())
+}
+
+model TowingMission {
+  id                   String         @id @default(uuid())
+  client               Client         @relation(fields: [clientId], references: [id])
+  clientId             String
+  depanneur            User?          @relation("DepanneurMissions", fields: [depanneurId], references: [id])
+  depanneurId          String?
+  statut               MissionStatus  @default(EN_ATTENTE)
+  latitudeDestination  Float?
+  longitudeDestination Float?
+  gpsLogs              GPSLog[]
+  trackingLink         TrackingLink?
+  createdAt            DateTime       @default(now())
+}
+
+model GPSLog {
+  id        String        @id @default(uuid())
+  mission   TowingMission @relation(fields: [missionId], references: [id])
+  missionId String
+  latitude  Float
+  longitude Float
+  timestamp DateTime      @default(now())
+}
+
+model TrackingLink {
+  id            String         @id @default(uuid())
+  token         String         @unique @default(uuid())
+  repairOrder   RepairOrder?   @relation(fields: [repairOrderId], references: [id])
+  repairOrderId String?        @unique
+  mission       TowingMission? @relation(fields: [missionId], references: [id])
+  missionId     String?        @unique
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+}
+
+model AppConfig {
+  id               String   @id @default(uuid())
+  seuilAvenantAuto Decimal  @default(0) @db.Decimal(10, 2)
+  updatedAt        DateTime @updatedAt
 }
