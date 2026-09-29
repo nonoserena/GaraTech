@@ -65,10 +65,20 @@ enum MissionStatus {
   ANNULEE
 }
 
+enum UserStatus {
+  PENDING
+  ACTIF
+  SUSPENDU
+}
+
 model User {
   id        String          @id @default(uuid())
-  email     String          @unique
+  email     String?         @unique
+  phone     String?         @unique
+  passwordHash String?
   role      UserRole
+  status    UserStatus      @default(PENDING)
+  nom       String?
   client    Client?
   missions  TowingMission[] @relation("DepanneurMissions")
   createdAt DateTime        @default(now())
