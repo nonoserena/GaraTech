@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { PrismaClient } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { VehicleForm } from "@/components/clients/vehicle-form";
+import { CreateRepairOrderButton } from "@/components/clients/create-repair-order-button";
 
 const prisma = new PrismaClient();
 
@@ -42,14 +43,20 @@ export default async function ClientDetailPage({
       ) : (
         <ul className="flex flex-col gap-3">
           {client.vehicles.map((v) => (
-            <li key={v.id} className="rounded border border-input p-4">
-              <p className="font-medium">
-                {v.marque} {v.modele}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {v.immatriculation}
-                {v.kilometrage && ` — ${v.kilometrage} km`}
-              </p>
+            <li
+              key={v.id}
+              className="flex items-center justify-between rounded border border-input p-4"
+            >
+              <div>
+                <p className="font-medium">
+                  {v.marque} {v.modele}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {v.immatriculation}
+                  {v.kilometrage && ` — ${v.kilometrage} km`}
+                </p>
+              </div>
+              <CreateRepairOrderButton vehicleId={v.id} />
             </li>
           ))}
         </ul>
