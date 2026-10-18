@@ -6,28 +6,26 @@ Plateforme intégrée de gestion de garage automobile : suivi atelier, gestion d
 
 | Domaine | Technologie |
 |---|---|
-| Frontend / PWA | Next.js 14 (App Router), TypeScript, TailwindCSS, shadcn/ui |
-| Cartographie | Leaflet.js / OpenStreetMap (react-leaflet) |
-| Backend / DB | Supabase (PostgreSQL, Auth, RLS, Realtime) |
+| Frontend | Next.js 14 (App Router), TypeScript, TailwindCSS, shadcn/ui |
+| Authentification | Auth.js (NextAuth v5) — email + mot de passe |
+| Base de données | PostgreSQL 16 |
 | ORM | Prisma |
-| PDF | @react-pdf/renderer |
-| Infra locale | Docker Compose (stack Supabase self-hosted) |
-| Hébergement | Vercel / Render + Supabase Cloud |
+| Infra locale | Docker Compose (PostgreSQL seul) |
 
 ## Structure du projet
 
 ```
 garatech/
 ├── apps/
-│   └── web/              # Application Next.js (Dashboard Admin + PWA)
+│   └── web/              # Application Next.js
 ├── packages/
-│   └── types/            # Types TypeScript partagés
+│   └── types/             # Types TypeScript partagés
 ├── docker/
-│   └── volumes/          # Volumes persistants Docker (non versionnés)
-├── docker-compose.yml     # Stack Supabase locale
-├── .env.example           # Variables d'environnement à documenter
+│   └── volumes/           # Volumes persistants Docker (non versionnés)
+├── docker-compose.yml      # PostgreSQL local
+├── .env.example             # Variables d'environnement à documenter
 └── docs/
-    └── CDCF.md             # Cahier des charges fonctionnel et technique
+    └── CDCF.md               # Cahier des charges fonctionnel et technique
 ```
 
 ## Prérequis
@@ -41,38 +39,38 @@ garatech/
 ### 1. Cloner le dépôt
 
 ```bash
-git clone <url-du-depot>
+git clone https://github.com/nonoserena/GaraTech.git
 cd garatech
 ```
 
 ### 2. Configurer les variables d'environnement
 
+Racine du projet (`.env`) :
+
 ```bash
 cp .env.example .env
 ```
 
-Générer les secrets requis :
+Complète `POSTGRES_PASSWORD`.
 
-```bash
-# JWT_SECRET
-openssl rand -base64 32
+Application (`apps/web/.env`) :
 
-# REALTIME_SECRET_KEY_BASE
-openssl rand -base64 64
+```env
+DATABASE_URL=postgresql://postgres:<ton_mot_de_passe>@localhost:5433/postgres
+AUTH_SECRET=
 ```
 
-Puis générer `ANON_KEY` et `SERVICE_ROLE_KEY` à partir du `JWT_SECRET` en suivant la documentation officielle Supabase self-hosting.
+Génère `AUTH_SECRET` :
 
-Compléter également `apps/web/.env.local` avec les mêmes clés (voir section correspondante dans `.env.example`).
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
 
-### 3. Lancer l'infrastructure Docker (Supabase local)
+### 3. Lancer la base de données
 
 ```bash
 pnpm docker:up
 ```
-
-- Studio (interface DB) : http://localhost:54323
-- API Gateway (Kong) : http://localhost:8000
 
 ### 4. Installer les dépendances
 
@@ -80,19 +78,26 @@ pnpm docker:up
 pnpm install
 ```
 
-### 5. Appliquer le schéma de base de données
+### 5. Appliquer les migrations
 
 ```bash
 pnpm db:migrate
 ```
 
-### 6. Lancer l'application
+### 6. Créer le premier compte Admin
+
+```bash
+$env:DATABASE_URL="postgresql://postgres:<ton_mot_de_passe>@localhost:5433/postgres"
+pnpm --filter web exec tsx scripts/create-admin.ts
+```
+
+### 7. Lancer l'application
 
 ```bash
 pnpm dev
 ```
 
-L'application est accessible sur http://localhost:3000
+Accessible sur http://localhost:3000
 
 ## Scripts disponibles
 
@@ -101,8 +106,8 @@ L'application est accessible sur http://localhost:3000
 | `pnpm dev` | Lance le serveur Next.js en développement |
 | `pnpm build` | Build de production |
 | `pnpm lint` | Vérifie le code avec ESLint |
-| `pnpm docker:up` | Démarre la stack Supabase locale |
-| `pnpm docker:down` | Arrête la stack Supabase locale |
+| `pnpm docker:up` | Démarre PostgreSQL localement |
+| `pnpm docker:down` | Arrête PostgreSQL |
 | `pnpm db:studio` | Ouvre Prisma Studio |
 | `pnpm db:migrate` | Applique les migrations Prisma |
 
@@ -114,11 +119,15 @@ Le cahier des charges fonctionnel et technique complet est disponible dans [`doc
 
 | Rôle | Périmètre |
 |---|---|
-| Admin | Accès complet, supervision, reporting |
+| Admin | Accès complet, supervision, validation des comptes, reporting |
 | Réceptionniste | Gestion clients, prise de rendez-vous, saisie dépannage |
 | Mécanicien | Diagnostic, devis, suivi statut atelier |
 | Dépanneur | Missions terrain, géolocalisation live |
 | Client | Suivi de son véhicule, historique, factures |
+
+## Workflow de contribution
+
+Ce projet suit le **GitHub Flow** : toute nouvelle fonctionnalité part d'une branche `feature/...` depuis `main`, est testée localement, puis intégrée via une Pull Request (CI automatique : lint + build).
 
 ## Licence
 
